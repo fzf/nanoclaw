@@ -23,6 +23,9 @@ export class DiscordChannel implements Channel {
   private client: Client | null = null;
   private opts: DiscordChannelOpts;
   private botToken: string;
+  // For guild-wide ("shared brain") registrations, remember which channel
+  // last sent a message so replies land in the right place.
+  private lastChannelByGuild: Map<string, string> = new Map();
 
   constructor(botToken: string, opts: DiscordChannelOpts) {
     this.botToken = botToken;
@@ -44,7 +47,19 @@ export class DiscordChannel implements Channel {
       if (message.author.bot) return;
 
       const channelId = message.channelId;
-      const chatJid = `dc:${channelId}`;
+      const channelJid = `dc:${channelId}`;
+      // Resolve to a guild-wide JID if one is registered (shared brain)
+      const guildJid = message.guildId ? `dc:guild:${message.guildId}` : null;
+      const groups = this.opts.registeredGroups();
+      const chatJid =
+        groups[channelJid]
+          ? channelJid
+          : guildJid && groups[guildJid]
+            ? guildJid
+            : channelJid;
+      if (chatJid.startsWith('dc:guild:') && message.guildId) {
+        this.lastChannelByGuild.set(message.guildId, channelId);
+      }
       let content = message.content;
       const timestamp = message.createdAt.toISOString();
       const senderName =
@@ -128,7 +143,7 @@ export class DiscordChannel implements Channel {
       this.opts.onChatMetadata(chatJid, timestamp, chatName, 'discord', isGroup);
 
       // Only deliver full message for registered groups
-      const group = this.opts.registeredGroups()[chatJid];
+      const group = groups[chatJid];
       if (!group) {
         logger.debug(
           { chatJid, chatName },
@@ -183,7 +198,11 @@ export class DiscordChannel implements Channel {
     }
 
     try {
-      const channelId = jid.replace(/^dc:/, '');
+      const channelId = this.resolveChannelId(jid);
+      if (!channelId) {
+        logger.warn({ jid }, 'Discord: no channel known for guild JID yet');
+        return;
+      }
       const channel = await this.client.channels.fetch(channelId);
 
       if (!channel || !('send' in channel)) {
@@ -224,10 +243,19 @@ export class DiscordChannel implements Channel {
     }
   }
 
+  private resolveChannelId(jid: string): string | null {
+    if (jid.startsWith('dc:guild:')) {
+      const guildId = jid.slice('dc:guild:'.length);
+      return this.lastChannelByGuild.get(guildId) ?? null;
+    }
+    return jid.replace(/^dc:/, '');
+  }
+
   async setTyping(jid: string, isTyping: boolean): Promise<void> {
     if (!this.client || !isTyping) return;
     try {
-      const channelId = jid.replace(/^dc:/, '');
+      const channelId = this.resolveChannelId(jid);
+      if (!channelId) return;
       const channel = await this.client.channels.fetch(channelId);
       if (channel && 'sendTyping' in channel) {
         await (channel as TextChannel).sendTyping();
