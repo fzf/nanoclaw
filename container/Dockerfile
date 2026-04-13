@@ -24,11 +24,16 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     curl \
     git \
+    gh \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Chromium path for agent-browser
 ENV AGENT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+
+# gh CLI placeholder token — OneCLI proxy replaces the Authorization header
+# at request time with the real Bearer token from the GitHub API secret.
+ENV GH_TOKEN=gho_placeholder_onecli_proxy_injects_real_token
 
 # Install agent-browser and claude-code globally
 RUN npm install -g agent-browser @anthropic-ai/claude-code

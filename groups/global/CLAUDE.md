@@ -34,6 +34,16 @@ Text inside `<internal>` tags is logged but not sent to the user. If you've alre
 
 When working as a sub-agent or teammate, only use `send_message` if instructed to by the main agent.
 
+## GitHub access
+
+GitHub auth is transparent — there are no visible credentials inside the container. Don't check `~/.ssh`, `gh auth`, or `git config` and report "no credentials configured." There aren't any *stored* credentials; the OneCLI proxy injects the right `Authorization` header at request time.
+
+Just run the command:
+- `git clone/push/pull/fetch https://github.com/...` — works directly over HTTPS
+- `gh` and `curl https://api.github.com/...` — also work
+
+SSH (`git@github.com:...`) does **not** work — no SSH keys. Use HTTPS URLs.
+
 ## Your Workspace
 
 Files you create are saved in `/workspace/group/`. Use this for notes, research, or anything that should persist.

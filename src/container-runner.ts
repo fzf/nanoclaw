@@ -259,6 +259,13 @@ async function buildContainerArgs(
     agent: agentIdentifier,
   });
   if (onecliApplied) {
+    // Mirror SSL_CERT_FILE → GIT_SSL_CAINFO so git trusts OneCLI's CA.
+    // OneCLI sets SSL_CERT_FILE for OpenSSL-based tools, but git uses its own env var.
+    const sslCertIdx = args.findIndex((a) => a.startsWith('SSL_CERT_FILE='));
+    if (sslCertIdx !== -1) {
+      const caPath = args[sslCertIdx].split('=', 2)[1];
+      args.push('-e', `GIT_SSL_CAINFO=${caPath}`);
+    }
     logger.info({ containerName }, 'OneCLI gateway config applied');
   } else {
     logger.warn(
